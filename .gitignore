@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Env
+.env
+.env.local
+
+# Data
+data/bronze/*.csv
+data/silver/*.parquet
+data/gold/
+
+# Cache
+*.cache
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
