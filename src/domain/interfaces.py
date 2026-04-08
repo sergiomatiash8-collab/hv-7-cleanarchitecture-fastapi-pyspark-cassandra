@@ -1,9 +1,13 @@
 from abc import ABC, abstractmethod
+from typing import List
 from src.domain.entities import Review
 
-# Domain interface (Contract)
 class IReviewRepository(ABC):
     @abstractmethod
     def save(self, review: Review):
-        """Save a review entity to the persistent storage"""
+        pass
+
+    @abstractmethod
+    def get_all(self) -> List[Review]:
+        """Fetch all reviews from the storage"""
         pass
