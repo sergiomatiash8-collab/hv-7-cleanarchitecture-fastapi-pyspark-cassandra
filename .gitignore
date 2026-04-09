@@ -25,3 +25,6 @@ data/gold/
 # OS
 .DS_Store
 Thumbs.db
+
+*.csv
+*.parquet
