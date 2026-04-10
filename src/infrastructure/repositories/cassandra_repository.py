@@ -5,18 +5,24 @@ from src.domain.interfaces import IReviewRepository
 
 class CassandraReviewRepository(IReviewRepository):
     def __init__(self):
-        # Establish connection to the local Cassandra node
-        self.cluster = Cluster(['127.0.0.1'], port=9042)
-        self.session = self.cluster.connect('review_keyspace')
+        # Connecting to the Cassandra container by its service name in Docker network
+        # Using the correct keyspace name: 'reviews_keyspace'
+        self.cluster = Cluster(['cassandra_dev'])
+        self.session = self.cluster.connect('reviews_keyspace')
 
     def save(self, review: Review):
-        # Persistence logic for saving a review
+        """
+        Persists a single review entity into the 'reviews' table.
+        """
         query = """
         INSERT INTO reviews (review_id, product_id, customer_id, star_rating, review_body, created_at)
         VALUES (%s, %s, %s, %s, %s, %s)
         """
+        # Ensure review_id is a valid UUID object for Cassandra
+        review_uuid = uuid.UUID(review.review_id) if isinstance(review.review_id, str) else review.review_id
+        
         self.session.execute(query, (
-            uuid.UUID(review.review_id),
+            review_uuid,
             review.product_id,
             review.customer_id,
             review.star_rating,
@@ -26,7 +32,9 @@ class CassandraReviewRepository(IReviewRepository):
         print(f"[Cassandra] Review {review.review_id} successfully persisted.")
 
     def get_all(self) -> list[Review]:
-        # Fetching all records and mapping them back to Domain Entities
+        """
+        Fetches all records from the 'reviews' table and maps them to Domain Entities.
+        """
         query = "SELECT * FROM reviews"
         rows = self.session.execute(query)
         
@@ -41,3 +49,9 @@ class CassandraReviewRepository(IReviewRepository):
                 created_at=row.created_at
             ))
         return results
+
+    def close(self):
+        """
+        Properly closes the cluster connection.
+        """
+        self.cluster.shutdown()

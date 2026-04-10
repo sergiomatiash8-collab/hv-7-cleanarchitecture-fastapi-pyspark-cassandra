@@ -33,6 +33,8 @@ services:
       context: ../../
       dockerfile: Dockerfile
     container_name: fast_api_app
+    ports:
+      - "8000:8000"
     tty: true
     stdin_open: true
     command: tail -f /dev/null
@@ -40,6 +42,7 @@ services:
       - ../../:/app
     environment:
       - PYTHONPATH=/app
+      - CASSANDRA_HOST=cassandra_dev
     depends_on:
       - cassandra
       - redis

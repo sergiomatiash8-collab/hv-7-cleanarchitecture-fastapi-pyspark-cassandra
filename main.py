@@ -1,38 +1,43 @@
 import os
-domain_path = os.path.join('src', 'domain')
-if os.path.exists(domain_path):
-    print(f"Файли в src/domain: {os.listdir(domain_path)}")
-else:
-    print("Папка src/domain не знайдена!")
-
 import uvicorn
 from fastapi import FastAPI
 from src.presentation.routes.review_routes import router as review_router
+from src.application.services.review_service import ReviewService
+from src.infrastructure.repositories.cassandra_repository import CassandraReviewRepository
+
+# Check domain files for debugging
+domain_path = os.path.join('src', 'domain')
+if os.path.exists(domain_path):
+    print(f"Files in src/domain: {os.listdir(domain_path)}")
+else:
+    print("Directory src/domain not found!")
 
 # --- ARCHITECTURE SETUP ---
-from src.application.services.review_service import ReviewService
 
-# OLD: In-memory storage (volatile)
-# from src.infrastructure.repositories.memory_repository import MemoryReviewRepository
-# repo = MemoryReviewRepository()
-
-# NEW: Cassandra storage (persistent)
-from src.infrastructure.repositories.cassandra_repository import CassandraReviewRepository
+# Initialize Cassandra storage (persistent)
+# Ensure CassandraReviewRepository uses host='cassandra_dev' inside
 repo = CassandraReviewRepository()
 
+# Initialize Service with Repository
 service = ReviewService(repo)
+
 # ---------------------------
 
 app = FastAPI(title="Review Service API")
 
-# Dependency Injection logic usually goes here or in the router
-# For now, we make sure our router uses the 'service' we just created
+# Store the service in app.state so routers can access it
 app.state.review_service = service
+
+# Include our routes
 app.include_router(review_router)
 
 @app.get("/")
 def read_root():
-    return {"message": "Сервер працює! Перейдіть на /docs для тестування"}
+    return {
+        "status": "online",
+        "message": "Server is running! Go to /docs for API testing"
+    }
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    # CRITICAL: host must be 0.0.0.0 for Docker port mapping to work
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
