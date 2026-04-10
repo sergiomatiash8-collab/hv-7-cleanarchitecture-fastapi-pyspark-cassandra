@@ -1,26 +1,45 @@
 version: '3.8'
 
 services:
-  # Cassandra Database Service for development
-  cassandra_db:
+  cassandra:
     image: cassandra:latest
     container_name: cassandra_dev
     ports:
-      - "9042:9042" # Port for Cassandra connection
+      - "9042:9042"
     environment:
-      - CASSANDRA_CLUSTER_NAME=DevCluster
-    volumes:
-      - cassandra_dev_data:/var/lib/cassandra
+      - CASSANDRA_CLUSTER_NAME=TestCluster
 
-  # Redis Service for caching (TTL 5 mins requirement)
-  redis_cache:
+  redis:
     image: redis:latest
     container_name: redis_dev
     ports:
-      - "6379:6379" # Port for Redis connection
-    volumes:
-      - redis_dev_data:/data
+      - "6379:6379"
 
-volumes:
-  cassandra_dev_data:
-  redis_dev_data:
+  spark-master:
+    image: apache/spark:latest
+    container_name: spark_master
+    command: bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+
+  spark-worker:
+    image: apache/spark:latest
+    container_name: spark_worker
+    command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    depends_on:
+      - spark-master
+
+  app:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    container_name: fast_api_app
+    volumes:
+      - ../../:/app
+    environment:
+      - PYTHONPATH=/app
+    depends_on:
+      - cassandra
+      - redis
+      - spark-master
