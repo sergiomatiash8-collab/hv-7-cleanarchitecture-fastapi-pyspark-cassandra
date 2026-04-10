@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  cassandra-prod:
+    image: cassandra:latest
+    container_name: cassandra_prod
+    ports:
+      - "9043:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=ProdCluster
+    restart: always

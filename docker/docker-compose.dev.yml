@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  cassandra-dev:
+    image: cassandra:latest
+    container_name: cassandra_dev
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=DevCluster
