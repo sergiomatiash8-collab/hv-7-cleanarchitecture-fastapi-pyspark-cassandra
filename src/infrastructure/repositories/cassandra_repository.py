@@ -1,88 +1,79 @@
-import uuid
+import os
 from cassandra.cluster import Cluster
 from src.domain.entities import Review
 from src.domain.interfaces import IReviewRepository
 
 class CassandraReviewRepository(IReviewRepository):
     def __init__(self):
-        # Підключення до сервісу cassandra_dev у мережі Docker
-        # Використовуємо ключовий простір 'reviews_keyspace'
-        self.cluster = Cluster(['cassandra_dev'])
-        self.session = self.cluster.connect('reviews_keyspace')
+        # Використовуємо 127.0.0.1 для локального запуску на Windows
+        host = os.getenv("CASSANDRA_HOST", "127.0.0.1")
+        
+        try:
+            self.cluster = Cluster([host], port=9042)
+            # ВАЖЛИВО: У твоєму SQL простір названо review_keyspace (в однині)
+            self.session = self.cluster.connect('review_keyspace')
+            self._prepare_statements()
+            print(f"🚀 [Cassandra] Connected to {host}")
+        except Exception as e:
+            print(f"❌ [Cassandra] Connection error: {e}")
+            raise
+
+    def _prepare_statements(self):
+        """Готуємо запити під твою єдину таблицю reviews."""
+        from cassandra import ConsistencyLevel # Додай цей імпорт вгорі файлу або тут
+
+        self.prep_insert = self.session.prepare("""
+            INSERT INTO reviews (review_id, product_id, customer_id, star_rating, review_body, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """)
+        
+        # Створюємо запит на вибірку
+        self.prep_by_product = self.session.prepare("""
+            SELECT * FROM reviews WHERE product_id = ? ALLOW FILTERING
+        """)
+        
+        # ФІКС: Встановлюємо мінімальну консистентність, щоб не було ReadFailure
+        self.prep_by_product.consistency_level = ConsistencyLevel.ONE
+        
+        self.prep_get_all = self.session.prepare("SELECT * FROM reviews LIMIT 50")
 
     def save(self, review: Review):
-        """
-        Зберігає сутність відгуку одночасно у три таблиці для швидкої вибірки.
-        Це забезпечує роботу API без ALLOW FILTERING.
-        """
-        queries = {
-            "by_product": """
-                INSERT INTO reviews_by_product (product_id, created_at, review_id, customer_id, star_rating, review_body)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            "by_rating": """
-                INSERT INTO reviews_by_product_rating (product_id, star_rating, created_at, review_id, customer_id, review_body)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            "by_customer": """
-                INSERT INTO reviews_by_customer (customer_id, created_at, review_id, product_id, star_rating, review_body)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """
-        }
-
-        # Конвертуємо ID у формат UUID для Cassandra
-        review_uuid = uuid.UUID(review.review_id) if isinstance(review.review_id, str) else review.review_id
-        
-        # 1. Запис для Return all reviews for specified product_id
-        self.session.execute(queries["by_product"], (
-            review.product_id, review.created_at, review_uuid, 
-            review.customer_id, review.star_rating, review.review_body
-        ))
-        
-        # 2. Запис для Return reviews by product_id AND star_rating
-        self.session.execute(queries["by_rating"], (
-            review.product_id, review.star_rating, review.created_at, 
-            review_uuid, review.customer_id, review.review_body
-        ))
-        
-        # 3. Запис для Return all reviews for specified customer_id
-        self.session.execute(queries["by_customer"], (
-            review.customer_id, review.created_at, review_uuid, 
-            review.product_id, review.star_rating, review.review_body
-        ))
-
-        print(f"✅ [Cassandra] Review {review.review_id} synced to all redundant tables.")
+        """Збереження сутності в базу."""
+        try:
+            self.session.execute(self.prep_insert, (
+                str(review.review_id),
+                review.product_id,
+                review.customer_id,
+                review.star_rating,
+                review.review_body,
+                review.created_at
+            ))
+            print(f"✅ [Cassandra] Review {review.review_id} saved.")
+        except Exception as e:
+            print(f"❌ [Cassandra] Save error: {e}")
 
     def get_by_product(self, product_id: str) -> list[Review]:
-        """Отримує всі відгуки для конкретного продукту."""
-        query = "SELECT * FROM reviews_by_product WHERE product_id = %s"
-        rows = self.session.execute(query, [product_id])
-        return self._map_rows_to_entities(rows)
-
-    def get_by_product_and_rating(self, product_id: str, rating: int) -> list[Review]:
-        """Отримує відгуки для продукту з конкретним рейтингом."""
-        query = "SELECT * FROM reviews_by_product_rating WHERE product_id = %s AND star_rating = %s"
-        rows = self.session.execute(query, (product_id, rating))
-        return self._map_rows_to_entities(rows)
-
-    def get_by_customer(self, customer_id: str) -> list[Review]:
-        """Отримує всі відгуки конкретного покупця."""
-        query = "SELECT * FROM reviews_by_customer WHERE customer_id = %s"
-        rows = self.session.execute(query, [customer_id])
+        """Отримання відгуків за product_id."""
+        rows = self.session.execute(self.prep_by_product, [product_id])
         return self._map_rows_to_entities(rows)
 
     def get_all(self) -> list[Review]:
-        """Реалізація абстрактного методу інтерфейсу. Повертає лімітований список."""
-        query = "SELECT * FROM reviews_by_product LIMIT 10"
-        rows = self.session.execute(query)
+        """Повертає список відгуків (ліміт 50)."""
+        rows = self.session.execute(self.prep_get_all)
+        return self._map_rows_to_entities(rows)
+
+    def get_by_customer(self, customer_id: str) -> list[Review]:
+        """Пошук за клієнтом (теж потребує фільтрації)."""
+        query = "SELECT * FROM reviews WHERE customer_id = %s ALLOW FILTERING"
+        rows = self.session.execute(query, [customer_id])
         return self._map_rows_to_entities(rows)
 
     def _map_rows_to_entities(self, rows) -> list[Review]:
-        """Допоміжний метод для мапінгу результатів БД у сутності Domain."""
+        """Конвертація рядків БД у об'єкти Review."""
         results = []
         for row in rows:
             results.append(Review(
-                review_id=str(row.review_id),
+                review_id=row.review_id,
                 product_id=row.product_id,
                 customer_id=row.customer_id,
                 star_rating=row.star_rating,
@@ -92,5 +83,7 @@ class CassandraReviewRepository(IReviewRepository):
         return results
 
     def close(self):
-        """Закриття з'єднання з кластером."""
-        self.cluster.shutdown()
+        """Закриття з'єднання."""
+        if not self.cluster.is_shutdown:
+            self.cluster.shutdown()
+            print("🔌 [Cassandra] Connection closed.")

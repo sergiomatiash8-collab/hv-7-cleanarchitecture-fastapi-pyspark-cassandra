@@ -1,11 +1,23 @@
 import redis
 import json
+import os
 
 class RedisClient:
-    def __init__(self, host='redis_dev', port=6379, db=0):
-        # host має збігатися з іменем сервісу в docker-compose
-        self.client = redis.Redis(host=host, port=port, db=db, decode_responses=True)
-        self.default_ttl = 300  # 5 хвилин у секундах [cite: 54, 76]
+    def __init__(self):
+        # Якщо в системі немає змінної REDIS_HOST, використовуємо 127.0.0.1 для Windows
+        host = os.getenv("REDIS_HOST", "127.0.0.1")
+        port = int(os.getenv("REDIS_PORT", 6379))
+        
+        # host має збігатися з іменем сервісу в docker-compose або бути 127.0.0.1
+        self.client = redis.Redis(host=host, port=port, db=0, decode_responses=True)
+        self.default_ttl = 300  # 5 хвилин у секундах
+        
+        # Перевірка підключення при ініціалізації
+        try:
+            self.client.ping()
+            print(f"🚀 [Redis] Connected to {host}")
+        except Exception as e:
+            print(f"❌ [Redis] Connection error: {e}")
 
     def set_cache(self, key: str, value, ttl=None):
         """Зберігає дані в кеш як JSON рядок."""
