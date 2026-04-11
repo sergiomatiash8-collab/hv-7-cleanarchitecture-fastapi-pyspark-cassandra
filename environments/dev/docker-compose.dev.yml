@@ -1,68 +1,71 @@
+version: '3.8'
+
+networks:
+  hv7_network:
+    driver: bridge
+
 services:
   cassandra:
-    image: cassandra:latest
-    container_name: cassandra_dev
+    image: cassandra:4.1
+    container_name: hv7-cassandra-dev
     ports:
       - "9042:9042"
     environment:
-      - CASSANDRA_CLUSTER_NAME=TestCluster
-    networks:
-      - dev-network
+      CASSANDRA_LISTEN_ADDRESS: cassandra
+      CASSANDRA_SEEDS: cassandra
+      CASSANDRA_CLUSTER_NAME: hv7-cluster
     volumes:
-      - ./cassandra-seed.dev.sql:/scripts/seed.sql
-    
+      - cassandra_data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "SELECT 1 FROM system.peers LIMIT 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - hv7_network
+    restart: unless-stopped
 
   redis:
-    image: redis:latest
-    container_name: redis_dev
+    image: redis:7-alpine
+    container_name: hv7-redis-dev
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
-      - dev-network
+      - hv7_network
+    restart: unless-stopped
 
-  spark-master:
-    image: apache/spark:latest
-    container_name: spark_master
-    command: bin/spark-class org.apache.spark.deploy.master.Master
-    ports:
-      - "8080:8080"
-      - "7077:7077"
-    networks:
-      - dev-network
-
-  spark-worker:
-    image: apache/spark:latest
-    container_name: spark_worker
-    command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
-    depends_on:
-      - spark-master
-    networks:
-      - dev-network
-
-  app:
+  api:
     build:
-      context: ../../
+      context: ../..
       dockerfile: Dockerfile
-    container_name: fast_api_app
+    container_name: hv7-api-dev
     ports:
       - "8000:8000"
-    tty: true
-    stdin_open: true
-    command: tail -f /dev/null
-    volumes:
-      - ../../:/app
-    environment:
-      - PYTHONPATH=/app
-      - CASSANDRA_HOST=cassandra_dev
-      - REDIS_HOST=redis_dev  # ДОДАНО: щоб API бачило Redis
     depends_on:
-      - cassandra
-      - redis
-      - spark-master
+      cassandra:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.dev
+    environment:
+      CASSANDRA_HOST: cassandra
+      REDIS_HOST: redis
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ../..:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     networks:
-      - dev-network
+      - hv7_network
+    restart: unless-stopped
 
-# ДОДАНО: Спільна мережа для всіх сервісів розробки
-networks:
-  dev-network:
-    driver: bridge
+volumes:
+  cassandra_data:
+  redis_data:
