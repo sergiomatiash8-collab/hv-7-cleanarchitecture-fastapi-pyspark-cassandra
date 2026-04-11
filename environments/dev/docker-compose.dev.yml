@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 networks:
   hv7_network:
@@ -8,63 +8,110 @@ services:
   cassandra:
     image: cassandra:4.1
     container_name: hv7-cassandra-dev
+
     ports:
       - "9042:9042"
+
     environment:
-      CASSANDRA_LISTEN_ADDRESS: cassandra
-      CASSANDRA_SEEDS: cassandra
       CASSANDRA_CLUSTER_NAME: hv7-cluster
+      CASSANDRA_SEEDS: cassandra
+      CASSANDRA_BROADCAST_ADDRESS: cassandra
+      CASSANDRA_LISTEN_ADDRESS: auto
+
     volumes:
       - cassandra_data:/var/lib/cassandra
-    healthcheck:
-      test: ["CMD", "cqlsh", "-e", "SELECT 1 FROM system.peers LIMIT 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+
     networks:
       - hv7_network
+
     restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh cassandra 9042 -e 'DESCRIBE KEYSPACES'"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+
+  cassandra-init:
+    image: cassandra:4.1
+    container_name: hv7-cassandra-init
+
+    depends_on:
+      cassandra:
+        condition: service_healthy
+
+    volumes:
+      - ./init/cassandra:/init
+
+    networks:
+      - hv7_network
+
+    entrypoint: ["/bin/bash", "-c"]
+    command: >
+      cqlsh cassandra 9042 -f /init/001-init.cql
+
+    restart: "no"
+
 
   redis:
     image: redis:7-alpine
     container_name: hv7-redis-dev
+
     ports:
       - "6379:6379"
+
     volumes:
       - redis_data:/data
+
+    networks:
+      - hv7_network
+
+    restart: unless-stopped
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - hv7_network
-    restart: unless-stopped
+      start_period: 10s
+
 
   api:
     build:
       context: ../..
       dockerfile: Dockerfile
+
     container_name: hv7-api-dev
+
     ports:
       - "8000:8000"
+
     depends_on:
       cassandra:
         condition: service_healthy
       redis:
         condition: service_healthy
+
     env_file:
       - .env.dev
+
     environment:
       CASSANDRA_HOST: cassandra
       REDIS_HOST: redis
       PYTHONUNBUFFERED: 1
+
     volumes:
       - ../..:/app
+
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
     networks:
       - hv7_network
+
     restart: unless-stopped
+
 
 volumes:
   cassandra_data:
