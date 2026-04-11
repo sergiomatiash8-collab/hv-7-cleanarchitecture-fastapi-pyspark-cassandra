@@ -8,6 +8,9 @@ services:
       - CASSANDRA_CLUSTER_NAME=TestCluster
     networks:
       - dev-network
+    volumes:
+      - ./cassandra-seed.dev.sql:/scripts/seed.sql
+    
 
   redis:
     image: redis:latest
