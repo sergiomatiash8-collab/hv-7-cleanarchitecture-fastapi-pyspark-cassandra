@@ -1,0 +1,62 @@
+services:
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=AmazonCluster
+      - CASSANDRA_DC=dc1
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=200M
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+      - ./scripts/init.cql:/docker-entrypoint-initdb.d/init.cql
+    networks:
+      - data_network
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - data_network
+
+  spark-master:
+    image: apache/spark:latest
+    container_name: spark-master
+    # В офіційному образі робоча директорія /opt/spark, тому шлях до бінарників такий:
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    user: root
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./data:/opt/spark/data
+      - ./scripts:/opt/spark/scripts
+    networks:
+      - data_network
+
+  spark-worker:
+    image: apache/spark:latest
+    container_name: spark-worker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    user: root
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=1
+    volumes:
+      - ./data:/opt/spark/data
+      - ./scripts:/opt/spark/scripts
+    networks:
+      - data_network
+
+networks:
+  data_network:
+    driver: bridge
+
+volumes:
+  cassandra_data:
