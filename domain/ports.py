@@ -4,99 +4,106 @@ from .entities import DatasetMetadata, CassandraTableConfig
 
 class DataFrame(ABC):
     """
-    Абстракція над DataFrame
-    Дозволяє не залежати від конкретної реалізації (Spark/Pandas/Polars)
+    Абстракція над табличною структурою даних.
+    
+    Призначення: Декуплеризація (роз'єднання) бізнес-логіки від конкретних бібліотек 
+    обробки даних (Apache Spark, Pandas, Polars). Це дозволяє змінювати рушій 
+    обробки без переписування всього ETL-пайплайну.
     """
     pass
 
 
 class DataReader(ABC):
     """
-    Порт для читання даних з різних джерел
+    Інтерфейс (Порт) для операцій читання даних (Extract).
     
-    Реалізації:
-    - SparkCSVReader (читає CSV через Spark)
-    - SparkParquetReader (читає Parquet через Spark)
+    Відповідальність: Визначення стандарту отримання даних з різних форматів 
+    та джерел, забезпечуючи уніфікований вихід у вигляді об'єкта DataFrame.
     """
     
     @abstractmethod
     def read(self, path: str, **options) -> DataFrame:
         """
-        Читає дані з файлу
+        Зчитує дані за вказаним шляхом.
         
         Args:
-            path: Шлях до файлу
-            options: Додаткові опції (header=True, inferSchema=True...)
+            path: Локація файлу або ресурс (S3 bucket, локальна папка, URL).
+            options: Словник параметрів, специфічних для формату (напр. сепаратор для CSV).
         
         Returns:
-            DataFrame з даними
+            Об'єкт, що реалізує інтерфейс DataFrame.
         """
         pass
     
     @abstractmethod
     def get_metadata(self, df: DataFrame) -> DatasetMetadata:
         """
-        Витягує метадані з DataFrame
+        Аналізує DataFrame для отримання статистичної та структурної інформації.
         
-        Returns:
-            DatasetMetadata (колонки, кількість рядків)
+        Використовується для валідації даних після зчитування та логування 
+        стану системи перед початком трансформацій.
         """
         pass
 
 
 class DataWriter(ABC):
     """
-    Порт для запису даних
+    Інтерфейс (Порт) для операцій збереження даних (Load).
     
-    Реалізації:
-    - SparkParquetWriter (записує Parquet)
-    - SparkCassandraWriter (записує в Cassandra)
+    Відповідальність: Абстрагування процесу персистентності (запису) даних 
+    у файлові системи або бази даних.
     """
     
     @abstractmethod
     def write(self, df: DataFrame, path: str, mode: str = "overwrite", **options) -> None:
         """
-        Записує дані
+        Записує вміст DataFrame у цільове призначення.
         
         Args:
-            df: DataFrame з даними
-            path: Куди записати (файл або таблиця)
-            mode: append/overwrite
-            options: Додаткові параметри
+            df: Дані для збереження.
+            path: Місце запису (шлях до файлу, назва таблиці).
+            mode: Стратегія запису: 'overwrite' (перезапис) або 'append' (додавання).
+            options: Додаткові параметри драйвера запису.
         """
         pass
 
 
 class DataTransformer(ABC):
     """
-    Порт для трансформацій даних
+    Інтерфейс (Порт) для трансформації даних (Transform).
     
-    Використовується в load_to_cassandra.py для:
-    - Очищення даних (trim, cast)
-    - Додавання колонок (year_month)
-    - Фільтрації (isNotNull)
+    Відповідальність: Містить визначення методів для очищення, збагачення 
+    та підготовки даних відповідно до бізнес-вимог. Це "мозок" ETL-процесу.
     """
     
     @abstractmethod
     def clean_reviews(self, df: DataFrame) -> DataFrame:
         """
-        Очищує дані відгуків:
-        - Конвертує типи
-        - Видаляє невалідні дати
-        - Додає year_month
+        Виконує комплексне очищення сирих даних відгуків.
+        
+        Сюди входить: 
+        - Приведення типів (Data Casting).
+        - Обробка відсутніх значень (Handling Nulls).
+        - Генерація похідних ознак (Feature Engineering), наприклад, year_month.
         """
         pass
     
     @abstractmethod
     def select_columns(self, df: DataFrame, columns: List[str]) -> DataFrame:
-        """Вибирає потрібні колонки"""
+        """
+        Проекція даних: залишає лише необхідний набір колонок.
+        Використовується для оптимізації пам'яті та відповідності схемі цільової БД.
+        """
         pass
 
 
 class CassandraLoader(ABC):
     """
-    Порт для запису в Cassandra
-    Окремо, бо тут специфічна логіка (keyspace, table)
+    Спеціалізований інтерфейс для завантаження даних у NoSQL БД Cassandra.
+    
+    Виділений в окремий клас, оскільки робота з Cassandra вимагає специфічних 
+    метаданих (Keyspace, Table Configuration) та механізмів консистентності, 
+    які виходять за рамки звичайного DataWriter.
     """
     
     @abstractmethod
@@ -107,9 +114,14 @@ class CassandraLoader(ABC):
         mode: str = "append"
     ) -> int:
         """
-        Завантажує дані в Cassandra таблицю
+        Виконує завантаження даних у конкретну таблицю Cassandra.
         
+        Args:
+            df: Оброблений набір даних.
+            table_config: Конфігурація цільової таблиці (схема, ключі).
+            mode: Режим запису (зазвичай 'append' для розподілених БД).
+            
         Returns:
-            Кількість записаних рядків
+            Кількість успішно завантажених записів для подальшої перевірки (Audit).
         """
         pass
