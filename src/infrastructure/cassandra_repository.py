@@ -1,59 +1,53 @@
-from cassandra.cluster import Cluster, Session
-from cassandra.io.geventreactor import GeventConnection
-from typing import Optional
+from cassandra.cluster import Session
+from typing import List, Optional
 from datetime import date
-
-# Перехід на абсолютні імпорти
 from src.domain.repositories import ReviewRepository
-from src.domain.entities import Review, ProductReviews, CustomerReviews
+from src.domain.entities import (
+    Review, ProductReviews, CustomerReviews, 
+    TopReviewedProduct, TopCustomer, TopHater, TopBacker
+)
 
 class CassandraReviewRepository(ReviewRepository):
-    """
-    Конкретна реалізація інтерфейсу ReviewRepository для Apache Cassandra.
-    
-    Відповідальність: Інкапсуляція CQL-запитів (Cassandra Query Language) та 
-    забезпечення зв'язку між фізичною схемою таблиць і доменною моделлю.
-    """
-    
     def __init__(self, session: Session):
-        """
-        Ініціалізація через активну сесію Cassandra.
-        """
         self._session = session
-    
+
     def get_by_product(self, product_id: str) -> ProductReviews:
-        """
-        Отримує відгуки з таблиці, оптимізованої для пошуку за продуктом.
-        """
         query = "SELECT * FROM reviews_by_product WHERE product_id = %s"
         rows = self._session.execute(query, [product_id])
-        
-        reviews = [self._row_to_review(row) for row in rows]
-        return ProductReviews(product_id=product_id, reviews=reviews)
-    
+        return ProductReviews(product_id=product_id, reviews=[self._row_to_review(row) for row in rows])
+
     def get_by_product_and_rating(self, product_id: str, rating: int) -> ProductReviews:
-        """
-        Отримує відгуки продукту та фільтрує їх за рейтингом (In-memory filtering).
-        """
-        all_reviews = self.get_by_product(product_id)
-        filtered = [r for r in all_reviews.reviews if r.star_rating == rating]
-        return ProductReviews(product_id=product_id, reviews=filtered)
-    
+        query = "SELECT * FROM reviews_by_product WHERE product_id = %s AND star_rating = %s"
+        rows = self._session.execute(query, [product_id, rating])
+        return ProductReviews(product_id=product_id, reviews=[self._row_to_review(row) for row in rows])
+
     def get_by_customer(self, customer_id: str) -> CustomerReviews:
-        """
-        Отримує відгуки з денормалізованої таблиці reviews_by_customer.
-        """
         query = "SELECT * FROM reviews_by_customer WHERE customer_id = %s"
         rows = self._session.execute(query, [customer_id])
-        
-        reviews = [self._row_to_review(row) for row in rows]
-        return CustomerReviews(customer_id=customer_id, reviews=reviews)
-    
+        return CustomerReviews(customer_id=customer_id, reviews=[self._row_to_review(row) for row in rows])
+
+    def get_top_reviewed_products(self, n: int, start_date: str, end_date: str) -> List[TopReviewedProduct]:
+        query = "SELECT product_id, review_count FROM product_stats_by_period WHERE period >= %s AND period <= %s LIMIT %s"
+        rows = self._session.execute(query, [start_date, end_date, n])
+        return [TopReviewedProduct(row.product_id, row.review_count) for row in rows]
+
+    def get_top_customers_verified(self, n: int, start_date: str, end_date: str) -> List[TopCustomer]:
+        query = "SELECT customer_id, review_count FROM customer_verified_stats_by_period WHERE period >= %s AND period <= %s LIMIT %s"
+        rows = self._session.execute(query, [start_date, end_date, n])
+        return [TopCustomer(row.customer_id, row.review_count) for row in rows]
+
+    def get_top_haters(self, n: int, start_date: str, end_date: str) -> List[TopHater]:
+        query = "SELECT customer_id, bad_reviews_count FROM hater_stats_by_period WHERE period >= %s AND period <= %s LIMIT %s"
+        rows = self._session.execute(query, [start_date, end_date, n])
+        return [TopHater(row.customer_id, row.bad_reviews_count) for row in rows]
+
+    def get_top_backers(self, n: int, start_date: str, end_date: str) -> List[TopBacker]:
+        query = "SELECT customer_id, good_reviews_count FROM backer_stats_by_period WHERE period >= %s AND period <= %s LIMIT %s"
+        rows = self._session.execute(query, [start_date, end_date, n])
+        return [TopBacker(row.customer_id, row.good_reviews_count) for row in rows]
+
     @staticmethod
     def _row_to_review(row) -> Review:
-        """
-        Допоміжний метод-мапер (Data Mapper).
-        """
         return Review(
             review_id=row.review_id,
             product_id=row.product_id,
