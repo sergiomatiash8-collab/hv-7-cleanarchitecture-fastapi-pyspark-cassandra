@@ -3,12 +3,12 @@ import os
 
 spark = SparkSession.builder.appName("Convert").getOrCreate()
 
-# Читаємо твій CSV (шлях всередині контейнера)
+
 csv_path = "/opt/spark/data/raw/amazon_reviews.csv"
 
 if os.path.exists(csv_path):
     df = spark.read.csv(csv_path, header=True, inferSchema=True)
-    # Перетискаємо в Parquet
+   
     df.write.mode("overwrite").parquet("/opt/spark/data/processed/reviews.parquet")
     print("--- УСПІШНО: CSV ПЕРЕТИСНУТО В PARQUET ---")
 else:

@@ -20,12 +20,12 @@ _redis_client = None
 def init_dependencies():
     global _cassandra_session, _redis_client
     
-    # Створюємо кластер без GeventConnection, щоб не було конфліктів з asyncio (uvicorn)
+    
     cluster = Cluster([settings.cassandra_host], port=settings.cassandra_port)
     
     _cassandra_session = cluster.connect(settings.cassandra_keyspace)
     
-    # Встановлюємо row_factory, щоб отримувати результати як словники (dict)
+    
     _cassandra_session.row_factory = dict_factory
     
     _redis_client = redis.Redis(

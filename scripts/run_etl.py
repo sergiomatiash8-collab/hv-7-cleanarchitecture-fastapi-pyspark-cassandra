@@ -1,7 +1,7 @@
 import os
 import sys
 
-# Додаємо шлях, щоб Spark бачив папку etl
+
 sys.path.insert(0, '/opt/spark')
 
 from etl.engine import get_spark_session
@@ -20,20 +20,20 @@ def run_main_pipeline():
     print("="*50 + "\n")
     
     if not os.path.exists(data_path):
-        print(f"❌ ERROR: File not found at {data_path}")
+        print(f" ERROR: File not found at {data_path}")
         sys.exit(1)
 
     print("--- Initializing Spark Session ---")
     spark = get_spark_session()
     
-    # ВИПРАВЛЕННЯ: Вимикаємо жорсткий ANSI режим, щоб Spark не падав на кривих датах
+    
     spark.conf.set("spark.sql.ansi.enabled", "false")
     
     print("--- Reading Parquet ---")
     raw_df = spark.read.parquet(data_path)
     
     print("--- Transforming Data ---")
-    # Тут тепер відпрацює фільтрація NULL значень, які з'являться замість тексту "this is business"
+    
     clean_df = clean_reviews_data(raw_df).cache()
     
     print("--- Loading: reviews_by_product ---")
@@ -61,7 +61,7 @@ def run_main_pipeline():
     load_to_cassandra(get_backer_stats(clean_df), "backer_stats_by_period")
     
     print("\n" + "="*50)
-    print("✅ SUCCESS: ALL DATA LOADED TO CASSANDRA")
+    print(" SUCCESS: ALL DATA LOADED TO CASSANDRA")
     print("="*50 + "\n")
     
     clean_df.unpersist()

@@ -47,7 +47,7 @@ class CassandraReviewRepository(ReviewRepository):
 
     @staticmethod
     def _row_to_review(row: dict) -> Review:
-        # Для словників використовуємо .get(), щоб безпечно отримувати значення
+        
         return Review(
             review_id=row.get('review_id', ''),
             product_id=row.get('product_id', ''),
