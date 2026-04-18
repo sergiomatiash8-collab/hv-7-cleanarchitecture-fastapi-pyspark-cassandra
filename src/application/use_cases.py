@@ -70,11 +70,11 @@ class GetTopReviewedProductsUseCase:
     def __init__(self, repo: ReviewRepository, cache: CacheRepository, ttl: int = 300):
         self.repo, self.cache, self.ttl = repo, cache, ttl
 
-    def execute(self, n: int, start: str, end: str) -> List[dict]:
-        key = f"top_prod:{n}:{start}:{end}"
+    def execute(self, n: int, period: str) -> List[dict]:
+        key = f"top_prod:{n}:{period}"
         cached = self.cache.get(key)
         if cached: return cached
-        res = [r.__dict__ for r in self.repo.get_top_reviewed_products(n, start, end)]
+        res = [r.__dict__ for r in self.repo.get_top_reviewed_products(n, period)]
         self.cache.set(key, res, self.ttl)
         return res
 
@@ -82,11 +82,11 @@ class GetTopCustomersUseCase:
     def __init__(self, repo: ReviewRepository, cache: CacheRepository, ttl: int = 300):
         self.repo, self.cache, self.ttl = repo, cache, ttl
 
-    def execute(self, n: int, start: str, end: str) -> List[dict]:
-        key = f"top_cust:{n}:{start}:{end}"
+    def execute(self, n: int, period: str) -> List[dict]:
+        key = f"top_cust:{n}:{period}"
         cached = self.cache.get(key)
         if cached: return cached
-        res = [r.__dict__ for r in self.repo.get_top_customers_verified(n, start, end)]
+        res = [r.__dict__ for r in self.repo.get_top_customers_verified(n, period)]
         self.cache.set(key, res, self.ttl)
         return res
 
@@ -94,11 +94,11 @@ class GetTopHatersUseCase:
     def __init__(self, repo: ReviewRepository, cache: CacheRepository, ttl: int = 300):
         self.repo, self.cache, self.ttl = repo, cache, ttl
 
-    def execute(self, n: int, start: str, end: str) -> List[dict]:
-        key = f"top_haters:{n}:{start}:{end}"
+    def execute(self, n: int, period: str) -> List[dict]:
+        key = f"top_haters:{n}:{period}"
         cached = self.cache.get(key)
         if cached: return cached
-        res = [r.__dict__ for r in self.repo.get_top_haters(n, start, end)]
+        res = [r.__dict__ for r in self.repo.get_top_haters(n, period)]
         self.cache.set(key, res, self.ttl)
         return res
 
@@ -106,10 +106,10 @@ class GetTopBackersUseCase:
     def __init__(self, repo: ReviewRepository, cache: CacheRepository, ttl: int = 300):
         self.repo, self.cache, self.ttl = repo, cache, ttl
 
-    def execute(self, n: int, start: str, end: str) -> List[dict]:
-        key = f"top_backers:{n}:{start}:{end}"
+    def execute(self, n: int, period: str) -> List[dict]:
+        key = f"top_backers:{n}:{period}"
         cached = self.cache.get(key)
         if cached: return cached
-        res = [r.__dict__ for r in self.repo.get_top_backers(n, start, end)]
+        res = [r.__dict__ for r in self.repo.get_top_backers(n, period)]
         self.cache.set(key, res, self.ttl)
         return res

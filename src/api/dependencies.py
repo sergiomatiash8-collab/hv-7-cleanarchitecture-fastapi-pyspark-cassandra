@@ -1,6 +1,6 @@
 import redis
 from cassandra.cluster import Cluster
-from cassandra.io.geventreactor import GeventConnection
+from cassandra.query import dict_factory
 from src.config.settings import settings
 from src.infrastructure.cassandra_repository import CassandraReviewRepository
 from src.infrastructure.redis_cache import RedisCache
@@ -19,9 +19,15 @@ _redis_client = None
 
 def init_dependencies():
     global _cassandra_session, _redis_client
+    
+    # Створюємо кластер без GeventConnection, щоб не було конфліктів з asyncio (uvicorn)
     cluster = Cluster([settings.cassandra_host], port=settings.cassandra_port)
-    cluster.connection_class = GeventConnection
+    
     _cassandra_session = cluster.connect(settings.cassandra_keyspace)
+    
+    # Встановлюємо row_factory, щоб отримувати результати як словники (dict)
+    _cassandra_session.row_factory = dict_factory
+    
     _redis_client = redis.Redis(
         host=settings.redis_host,
         port=settings.redis_port,
